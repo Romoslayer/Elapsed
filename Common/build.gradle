@@ -1,0 +1,42 @@
+plugins {
+    id 'multiloader-common'
+    id 'net.neoforged.moddev'
+}
+
+// Plain Minecraft (no loader) so nothing loader-specific can creep into the shared code
+neoForge {
+    neoFormVersion = neoform_version
+}
+
+dependencies {
+    compileOnly 'org.spongepowered:mixin:0.8.5'
+    // Fabric Loader and NeoForge both bundle MixinExtras
+    compileOnly "io.github.llamalad7:mixinextras-common:${mixinextras_version}"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:${mixinextras_version}"
+}
+
+repositories {
+    maven {
+        name = 'Sponge'
+        url = 'https://repo.spongepowered.org/repository/maven-public'
+        content { includeGroupAndSubgroups('org.spongepowered') }
+    }
+}
+
+// The few classes that differ between game versions (brewing became data-driven in 26.3) live in
+// src/version/<mc>/java; only the folder for the version being built is compiled.
+sourceSets.main.java.srcDir("src/version/${mc_version}/java")
+
+// Tests for the parts that can be checked without a running server (config, maths, handler selection)
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
+}
+
+neoForge {
+    addModdingDependenciesTo(sourceSets.test)
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}
