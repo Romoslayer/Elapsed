@@ -1,0 +1,29 @@
+modLoader = "javafml"
+loaderVersion = "[${forge_major},)"
+license = "${license}"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "${mod_name}"
+authors = "${mod_author}"
+logoFile = "assets/${mod_id}/icon.png"
+# Server-side only: players without the mod can join
+displayTest = "IGNORE_SERVER_VERSION"
+description = '''
+${mod_description}
+'''
+
+[[dependencies.${mod_id}]]
+modId = "forge"
+mandatory = true
+versionRange = "[${forge_major},)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+mandatory = true
+versionRange = "${forge_mc_range}"
+ordering = "NONE"
+side = "BOTH"

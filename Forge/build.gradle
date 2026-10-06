@@ -1,0 +1,56 @@
+plugins {
+    id 'multiloader-loader'
+    id 'net.minecraftforge.gradle'
+}
+
+// "26.2-65.1.3" -> "65": the Forge major version, which mods.toml's ranges use
+def forgeMajor = forge_version.tokenize('-')[1].tokenize('.')[0]
+def mixinConfig = "${mod_id}.mixins.json"
+
+minecraft {
+    runs {
+        configureEach {
+            // Dev runs load classes from folders, so Mixin cannot read the jar manifest
+            args '--mixin.config', mixinConfig
+        }
+        register('client') {
+            workingDir = layout.projectDirectory.dir('runs/client')
+        }
+        register('server') {
+            workingDir = layout.projectDirectory.dir('runs/server')
+            args '--nogui'
+        }
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+}
+
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${forge_version}")
+}
+
+processResources {
+    def mcParts = mc_version.tokenize('.')
+    def forgeProps = [forge_major: forgeMajor, forge_mc_range: "[${mc_version},${mcParts[0]}.${(mcParts[1] as int) + 1})"]
+    inputs.properties(forgeProps + [mixin_compatibility: 'JAVA_21'])
+    filesMatching('META-INF/mods.toml') {
+        expand(forgeProps + [version: project.version.toString(), mod_id: mod_id, mod_name: mod_name, mod_author: mod_author,
+                             mod_description: mod_description, license: license])
+    }
+    // Forge bundles Mixin 0.8.7, which knows compatibility levels up to JAVA_21 and refuses to load a config naming a
+    // newer one. The level only gates Mixin features, none of which Elapsed uses, so the Forge jar's copy says JAVA_21.
+    filesMatching(mixinConfig) {
+        filter { it.replace('"JAVA_25"', '"JAVA_21"') }
+    }
+}
+
+jar {
+    // Forge finds the mixin config through the manifest
+    manifest {
+        attributes 'MixinConfigs': mixinConfig
+    }
+}

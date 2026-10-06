@@ -6,7 +6,7 @@ time passed and what the supported things in it would have done in that time, an
 
 > Reconcile elapsed time. Do not simulate absence.
 
-100% server-side: vanilla clients connect without installing anything. Fabric and NeoForge, Minecraft 26.2 and 26.3.
+100% server-side: vanilla clients connect without installing anything. Fabric, NeoForge and Forge, Minecraft 26.2 and 26.3.
 
 **Download:** [CurseForge](https://www.curseforge.com/minecraft/mc-mods/elapsed) ·
 [GitHub releases](https://github.com/Romoslayer/Elapsed/releases)
@@ -76,7 +76,7 @@ Catching up is an estimate of what vanilla would have done, not a replay. Where 
   exact pattern of aged blocks can differ from an unloaded-and-replayed one (the overall rate follows vanilla).
 - A sapling lit only by the sky is assumed to get enough light half of the time.
 - Things placed in a chunk in the few ticks between it starting to tick and its catch-up running share in that catch-up.
-- NeoForge brewing events are not fired for caught-up brews.
+- NeoForge and Forge brewing events are not fired for caught-up brews.
 
 ## Configuration
 
@@ -127,7 +127,7 @@ gradlew build            # Minecraft 26.3
 gradlew build -Pmc=26.2  # Minecraft 26.2
 ```
 
-Jars land in `Fabric/build/libs` and `NeoForge/build/libs`. `gradlew runVanillaClient -Pserver=localhost:25565` starts the official,
+Jars land in `Fabric/build/libs`, `NeoForge/build/libs` and `Forge/build/libs`. `gradlew runVanillaClient -Pserver=localhost:25565` starts the official,
 unmodded client and joins a test server, to see what players without the mod see. The few classes that differ between game versions live in
 `Common/src/version/<mc>/java`.
 

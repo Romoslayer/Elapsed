@@ -41,6 +41,7 @@ Operators can use `/elapsed status`, `/elapsed chunk`, `/elapsed reload` and `/e
 
 - **Fabric**: requires Fabric API.
 - **NeoForge**: no other mods needed.
+- **Forge**: no other mods needed.
 - **Seasonfall**: crops unloaded through several seasons grow by the seasons they actually spent unloaded.
 - Other mods can add their own systems through Elapsed's API.
 
