@@ -8,8 +8,7 @@ time passed and what the supported things in it would have done in that time, an
 
 100% server-side: vanilla clients connect without installing anything. Fabric, NeoForge and Forge, Minecraft 26.2 and 26.3.
 
-**Download:** [CurseForge](https://www.curseforge.com/minecraft/mc-mods/elapsed) ·
-[GitHub releases](https://github.com/Romoslayer/Elapsed/releases)
+**Download:** [CurseForge](https://www.curseforge.com/minecraft/mc-mods/elapsed)
 
 ## What catches up
 
