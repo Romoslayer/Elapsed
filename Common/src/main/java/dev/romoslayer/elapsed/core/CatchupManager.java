@@ -8,6 +8,7 @@ import dev.romoslayer.elapsed.api.CatchupContext;
 import dev.romoslayer.elapsed.api.EntityHandler;
 import dev.romoslayer.elapsed.api.OfflineProgressHandler;
 import dev.romoslayer.elapsed.config.ElapsedConfig;
+import dev.romoslayer.elapsed.mc.Versioned;
 import dev.romoslayer.elapsed.time.ElapsedClock;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -18,7 +19,6 @@ import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
@@ -167,7 +167,7 @@ public final class CatchupManager {
 				Pending<LevelChunk> pending = queue.poll();
 				LevelChunk chunk = pending.target;
 				ChunkPos pos = chunk.getPos();
-				if (pendingTicks(chunk) <= 0 || level.getChunkSource().getChunkNow(pos.x(), pos.z()) != chunk) {
+				if (pendingTicks(chunk) <= 0 || level.getChunkSource().getChunkNow(Versioned.chunkX(pos), Versioned.chunkZ(pos)) != chunk) {
 					// Done already, or unloaded (its time went to disk with it)
 					continue;
 				}
@@ -175,7 +175,7 @@ public final class CatchupManager {
 					((ElapsedChunk) chunk).elapsed$setDebt(0L);
 					continue;
 				}
-				if (!level.shouldTickBlocksAt(pos.pack()) || !neighboursLoaded(level, pos)) {
+				if (!level.shouldTickBlocksAt(Versioned.packChunk(pos)) || !neighboursLoaded(level, pos)) {
 					// Not doing anything in the game yet; or catching up could read into a chunk that is not loaded
 					pending.readySince = -1L;
 					queue.add(pending);
@@ -222,7 +222,7 @@ public final class CatchupManager {
 			for (int i = Math.min(queue.size(), PRUNE_CHECKS); i > 0; i--) {
 				Pending<LevelChunk> pending = queue.poll();
 				ChunkPos pos = pending.target.getPos();
-				if (pendingTicks(pending.target) > 0 && entry.getKey().getChunkSource().getChunkNow(pos.x(), pos.z()) == pending.target) {
+				if (pendingTicks(pending.target) > 0 && entry.getKey().getChunkSource().getChunkNow(Versioned.chunkX(pos), Versioned.chunkZ(pos)) == pending.target) {
 					pending.readySince = -1L;
 					queue.add(pending);
 				}
@@ -253,7 +253,7 @@ public final class CatchupManager {
 	private static boolean neighboursLoaded(ServerLevel level, ChunkPos pos) {
 		for (int dx = -1; dx <= 1; dx++) {
 			for (int dz = -1; dz <= 1; dz++) {
-				if ((dx != 0 || dz != 0) && level.getChunkSource().getChunkNow(pos.x() + dx, pos.z() + dz) == null) {
+				if ((dx != 0 || dz != 0) && level.getChunkSource().getChunkNow(Versioned.chunkX(pos) + dx, Versioned.chunkZ(pos) + dz) == null) {
 					return false;
 				}
 			}
@@ -305,7 +305,7 @@ public final class CatchupManager {
 		long now = this.server.getTickCount();
 		for (Map.Entry<ServerLevel, ArrayDeque<Pending<LevelChunk>>> entry : this.chunkQueues.entrySet()) {
 			for (Pending<LevelChunk> pending : entry.getValue()) {
-				if (pending.readySince < 0 && entry.getKey().shouldTickBlocksAt(pending.target.getPos().pack())) {
+				if (pending.readySince < 0 && entry.getKey().shouldTickBlocksAt(Versioned.packChunk(pending.target.getPos()))) {
 					pending.readySince = now;
 				}
 			}
@@ -391,13 +391,13 @@ public final class CatchupManager {
 		((ElapsedChunk) chunk).elapsed$setDebt(0L);
 		if (touched > 0) {
 			// Save the chunk with a fresh timestamp even if nothing changed, so the same time is not tried again
-			chunk.markUnsaved();
+			Versioned.markUnsaved(chunk);
 		}
 		this.chunksCaughtUp++;
 		if (context.isDebug() && touched > 0) {
 			ChunkPos pos = chunk.getPos();
-			Elapsed.LOGGER.info("[Elapsed] Caught up chunk [{}, {}] in {}: {} ticks away, {} thing(s) checked", pos.x(), pos.z(),
-					level.dimension().identifier(), debt, touched);
+			Elapsed.LOGGER.info("[Elapsed] Caught up chunk [{}, {}] in {}: {} ticks away, {} thing(s) checked", Versioned.chunkX(pos), Versioned.chunkZ(pos),
+					Versioned.dimensionId(level), debt, touched);
 			for (String note : context.notes()) {
 				Elapsed.LOGGER.info("[Elapsed]   {}", note);
 			}
@@ -439,7 +439,7 @@ public final class CatchupManager {
 	// ---- Running handlers
 
 	/** Captures, calculates and applies. Returns whether the handler had anything to look at. */
-	private <T, S> boolean run(HandlerRegistry registry, Identifier id, OfflineProgressHandler<T, S> handler, T target, CatchupContext context) {
+	private <T, S> boolean run(HandlerRegistry registry, String id, OfflineProgressHandler<T, S> handler, T target, CatchupContext context) {
 		Runnable apply = this.prepare(registry, id, handler, target, context);
 		if (apply == null) {
 			return false;
@@ -449,7 +449,7 @@ public final class CatchupManager {
 	}
 
 	/** Captures and calculates; the returned step applies the result (null when there was nothing to look at). */
-	private <T, S> @Nullable Runnable prepare(HandlerRegistry registry, Identifier id, OfflineProgressHandler<T, S> handler, T target,
+	private <T, S> @Nullable Runnable prepare(HandlerRegistry registry, String id, OfflineProgressHandler<T, S> handler, T target,
 			CatchupContext context) {
 		if (registry.isFailed(id)) {
 			return null;
@@ -517,7 +517,7 @@ public final class CatchupManager {
 		return this.lastBurst;
 	}
 
-	public Set<Identifier> failedHandlers() {
+	public Set<String> failedHandlers() {
 		return this.handlers.failedHandlers();
 	}
 

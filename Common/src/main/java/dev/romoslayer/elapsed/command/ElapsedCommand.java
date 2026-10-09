@@ -9,6 +9,7 @@ import dev.romoslayer.elapsed.Elapsed;
 import dev.romoslayer.elapsed.config.ElapsedConfig;
 import dev.romoslayer.elapsed.core.CatchupManager;
 import dev.romoslayer.elapsed.core.Timestamps;
+import dev.romoslayer.elapsed.mc.Versioned;
 import dev.romoslayer.elapsed.time.ElapsedClock;
 import java.util.List;
 import java.util.Locale;
@@ -29,7 +30,7 @@ public final class ElapsedCommand {
 
 	public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 		dispatcher.register(Commands.literal(Elapsed.MOD_ID)
-				.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+				.requires(Versioned.gameMasters())
 				.then(Commands.literal("status").executes(ElapsedCommand::status))
 				.then(Commands.literal("chunk").executes(ElapsedCommand::chunk))
 				.then(Commands.literal("reload").executes(ElapsedCommand::reload))
@@ -84,7 +85,7 @@ public final class ElapsedCommand {
 		LevelChunk chunk = level.getChunkAt(pos);
 		long pending = CatchupManager.pendingTicks(chunk);
 		boolean active = ElapsedConfig.get().general.enabled && Timestamps.isDimensionActive(level);
-		source.sendSuccess(() -> Component.literal("Chunk [" + chunk.getPos().x() + ", " + chunk.getPos().z() + "] in " + level.dimension().identifier())
+		source.sendSuccess(() -> Component.literal("Chunk [" + Versioned.chunkX(chunk.getPos()) + ", " + Versioned.chunkZ(chunk.getPos()) + "] in " + Versioned.dimensionId(level))
 				.withStyle(ChatFormatting.AQUA), false);
 		source.sendSuccess(() -> line("This dimension", active ? "catches up" : "does not catch up"), false);
 		source.sendSuccess(() -> line("Waiting to catch up", pending > 0 ? hours(pending) : "nothing"), false);

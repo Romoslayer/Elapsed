@@ -6,7 +6,8 @@ time passed and what the supported things in it would have done in that time, an
 
 > Reconcile elapsed time. Do not simulate absence.
 
-100% server-side: vanilla clients connect without installing anything. Fabric, NeoForge and Forge, Minecraft 26.2 and 26.3.
+100% server-side: vanilla clients connect without installing anything. Fabric, NeoForge and Forge, Minecraft 26.2, 26.3,
+1.21.1 and 1.20.1.
 
 **Download:** [CurseForge](https://www.curseforge.com/minecraft/mc-mods/elapsed)
 
@@ -20,11 +21,11 @@ time passed and what the supported things in it would have done in that time, an
 | Wheat, carrots, potatoes, beetroot, torchflowers | Age by the vanilla growth chance (farmland moisture, row layout) | Not enough light, can't survive, fully grown |
 | Melon and pumpkin stems | Grow, and may grow their fruit | Same, plus room for the fruit |
 | Nether wart, cocoa, sweet berries | Age by their vanilla chance | Same |
-| Sugar cane, cactus (+ cactus flower), bamboo | Grow taller, block by block | 3 high / bamboo's own height / no room |
+| Sugar cane, cactus (+ cactus flower on 26.x), bamboo | Grow taller, block by block | 3 high / bamboo's own height / no room |
 | Kelp, weeping, twisting and cave vines | Grow longer | Age 25 / no room |
 | Saplings | Move to their second stage only; the tree is grown by the game afterwards | — |
 | Copper | Oxidises, following vanilla's "younger copper nearby slows or blocks it" rule | Waxed copper never changes |
-| Baby animals (any mob that grows up) | Grow up | Age-locked babies stay babies |
+| Baby animals (any mob that grows up) | Grow up | Age-locked babies (26.x) stay babies |
 | Breeding cooldown, love mode | Run out | Nothing is ever bred |
 | Chickens | Egg timer runs on; missed eggs are laid, capped (default 2) | Chicks only start once grown |
 
@@ -107,6 +108,8 @@ ElapsedApi.registerEntityHandler(id, ...);
 ElapsedApi.registerGrowthRateProvider(id, (level, pos, state, elapsedTicks) -> 1.0);
 ```
 
+The ids are `Identifier`s on 26.x and `ResourceLocation`s on 1.21.1 and 1.20.1; everything else is the same.
+
 Handlers get the elapsed time already cut to their cap. Registered handlers are tried before Elapsed's own. For
 blocks and block entities the first handler that matches wins; for entities every matching handler runs (an animal can
 have several timers), each looking at the entity before any of them changes it.
@@ -122,13 +125,19 @@ Seasonfall that lacks that method (or with `[seasonfall] integrationEnabled = fa
 ## Building
 
 ```
-gradlew build            # Minecraft 26.3
-gradlew build -Pmc=26.2  # Minecraft 26.2
+gradlew build              # Minecraft 26.3
+gradlew build -Pmc=26.2    # Minecraft 26.2
+gradlew build -Pmc=1.21.1  # Minecraft 1.21.1
+gradlew build -Pmc=1.20.1  # Minecraft 1.20.1
 ```
 
-Jars land in `Fabric/build/libs`, `NeoForge/build/libs` and `Forge/build/libs`. `gradlew runVanillaClient -Pserver=localhost:25565` starts the official,
-unmodded client and joins a test server, to see what players without the mod see. The few classes that differ between game versions live in
-`Common/src/version/<mc>/java`.
+Jars land in `<Loader>/build/<generation>/libs` (`mc26`, `mc21` or `mc20`), for example `Fabric/build/mc26/libs`. The
+NeoForge jar for 1.20.1 is built for NeoForge 47.1, the Forge fork of that version. `gradlew runVanillaClient -Pserver=localhost:25565`
+starts the official, unmodded client and joins a test server, to see what players without the mod see.
+
+Code that differs between Minecraft generations lives in `src/<generation>/java` of each module (`Common/src/mc26/java`, ...,
+with `mc/Versioned.java` for the small differences), next to the shared `src/main/java`; the few classes that differ
+between 26.2 and 26.3 are in `Common/src/version/<mc>/java`.
 
 ## License
 

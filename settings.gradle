@@ -20,8 +20,8 @@ plugins {
 rootProject.name = 'elapsed'
 include('Common', 'Fabric', 'NeoForge', 'Forge')
 
-// One source tree builds every supported game version. The default is 26.3; build 26.2 with
-//   gradlew build -Pmc=26.2
+// One source tree builds every supported game version. The default is 26.3; build another with
+//   gradlew build -Pmc=26.2   (or 1.21.1, 1.20.1)
 // Everything that differs between versions lives in versions/<mc>.properties.
 def mc = providers.gradleProperty('mc').getOrElse('26.3')
 def versionFile = file("versions/${mc}.properties")

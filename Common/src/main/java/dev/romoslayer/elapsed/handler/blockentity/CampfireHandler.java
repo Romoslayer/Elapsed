@@ -11,8 +11,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeType;
-import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.CampfireBlockEntity;
@@ -82,10 +80,7 @@ public final class CampfireHandler implements BlockEntityHandler<CampfireHandler
 				// CampfireBlockEntity.cookTick: the slot is done on the tick its progress reaches its cooking time
 				long ticksToDone = Math.max(1L, (long) campfire.time[slot] - progress[slot]);
 				if (ticksToDone <= elapsedTicks) {
-					SingleRecipeInput input = new SingleRecipeInput(item);
-					ItemStack result = level.recipeAccess().getRecipeFor(RecipeType.CAMPFIRE_COOKING, input, level)
-							.map(recipe -> recipe.value().assemble(input))
-							.orElse(item);
+					ItemStack result = Cooking.campfireResult(level, item);
 					if (result.isItemEnabled(level.enabledFeatures())) {
 						cooked[slot] = result;
 						ticksAgo[slot] = elapsedTicks - ticksToDone;

@@ -2,15 +2,15 @@ package dev.romoslayer.elapsed.handler;
 
 import dev.romoslayer.elapsed.api.CatchupContext;
 import dev.romoslayer.elapsed.config.ElapsedConfig;
+import dev.romoslayer.elapsed.mc.Versioned;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.FarmlandBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 /**
  * The maths behind plant catch-up. Random ticks reach a block as a Poisson process (each game tick a block has a
@@ -69,9 +69,9 @@ public final class Growth {
 			for (int dz = -1; dz <= 1; dz++) {
 				float soilSpeed = 0.0F;
 				BlockState soil = context.loadedBlockState(below.offset(dx, 0, dz));
-				if (soil != null && soil.is(BlockTags.GROWS_CROPS)) {
+				if (soil != null && Versioned.growsCrops(soil)) {
 					soilSpeed = 1.0F;
-					if (soil.getValueOrElse(FarmlandBlock.MOISTURE, 0) > 0) {
+					if (soil.hasProperty(BlockStateProperties.MOISTURE) && soil.getValue(BlockStateProperties.MOISTURE) > 0) {
 						soilSpeed = 3.0F;
 					}
 				}

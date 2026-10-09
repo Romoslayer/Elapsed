@@ -4,6 +4,7 @@ import dev.romoslayer.elapsed.Elapsed;
 import dev.romoslayer.elapsed.api.ElapsedApi;
 import dev.romoslayer.elapsed.api.GrowthRateProvider;
 import dev.romoslayer.elapsed.config.ElapsedConfig;
+import dev.romoslayer.elapsed.core.Registrations;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -32,13 +33,13 @@ public final class SeasonfallBridge implements GrowthRateProvider {
 
 	public static void register() {
 		if (Elapsed.platform().isModLoaded(SEASONFALL)) {
-			ElapsedApi.registerGrowthRateProvider(Elapsed.id("seasonfall"), new SeasonfallBridge());
+			Registrations.registerGrowthRateProvider(Elapsed.id("seasonfall"), new SeasonfallBridge());
 		}
 	}
 
 	@Override
 	public double averageGrowthMultiplier(ServerLevel level, BlockPos pos, BlockState state, long elapsedTicks) {
-		if (!ElapsedConfig.get().seasonfall.integrationEnabled || ElapsedApi.hasGrowthRateProviderFrom(SEASONFALL) || !this.resolve()) {
+		if (!ElapsedConfig.get().seasonfall.integrationEnabled || Registrations.hasGrowthRateProviderFrom(SEASONFALL) || !this.resolve()) {
 			return 1.0;
 		}
 		try {

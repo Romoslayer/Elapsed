@@ -7,7 +7,6 @@ import dev.romoslayer.elapsed.config.ElapsedConfig;
 import dev.romoslayer.elapsed.core.CatchupManager;
 import dev.romoslayer.elapsed.platform.Platform;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -32,8 +31,9 @@ public final class Elapsed {
 	private Elapsed() {
 	}
 
-	public static Identifier id(String path) {
-		return Identifier.fromNamespaceAndPath(MOD_ID, path);
+	/** An id in Elapsed's namespace, as "elapsed:path". */
+	public static String id(String path) {
+		return MOD_ID + ":" + path;
 	}
 
 	public static void init(Platform loaderPlatform) {

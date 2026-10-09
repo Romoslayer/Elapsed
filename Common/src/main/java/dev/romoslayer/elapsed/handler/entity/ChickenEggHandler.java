@@ -7,12 +7,12 @@ import dev.romoslayer.elapsed.api.EntityHandler;
 import dev.romoslayer.elapsed.config.ElapsedConfig;
 import dev.romoslayer.elapsed.core.CatchupManager;
 import dev.romoslayer.elapsed.core.HandlerRegistry;
+import dev.romoslayer.elapsed.mc.Versioned;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.animal.chicken.Chicken;
-import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -37,13 +37,13 @@ public final class ChickenEggHandler implements EntityHandler<ChickenEggHandler.
 
 	@Override
 	public boolean canHandle(Entity target) {
-		return ElapsedConfig.get().chickens.eggTimers && target instanceof Chicken && !AgingHandler.isExcluded(target);
+		return ElapsedConfig.get().chickens.eggTimers && Chickens.isChicken(target) && !AgingHandler.isExcluded(target);
 	}
 
 	@Override
 	public @Nullable Eggs captureState(Entity target, CatchupContext context) {
-		Chicken chicken = (Chicken) target;
-		if (!chicken.isAlive() || chicken.isChickenJockey()) {
+		AgeableMob chicken = (AgeableMob) target;
+		if (!chicken.isAlive() || Chickens.isJockey(chicken)) {
 			return null;
 		}
 		long babyTicksLeft = 0L;
@@ -54,11 +54,11 @@ public final class ChickenEggHandler implements EntityHandler<ChickenEggHandler.
 			boolean aging = manager != null && manager.handlers().isActive(Elapsed.id("aging")) && ElapsedConfig.get().animals.aging;
 			babyTicksLeft = -(long) chicken.getAge();
 			long agingTime = Math.min(context.rawElapsedTicks(), HandlerRegistry.capTicks(CatchupCategory.ANIMALS));
-			if (!aging || !chicken.canAgeUp() || babyTicksLeft > agingTime) {
+			if (!aging || !Versioned.canAgeUp(chicken) || babyTicksLeft > agingTime) {
 				return null;
 			}
 		}
-		return new Eggs(chicken.eggTime, babyTicksLeft, chicken.eggTime, 0);
+		return new Eggs(Chickens.eggTime(chicken), babyTicksLeft, Chickens.eggTime(chicken), 0);
 	}
 
 	@Override
@@ -105,15 +105,15 @@ public final class ChickenEggHandler implements EntityHandler<ChickenEggHandler.
 
 	@Override
 	public void applyResult(Entity target, Eggs result, CatchupContext context) {
-		Chicken chicken = (Chicken) target;
+		AgeableMob chicken = (AgeableMob) target;
 		// Babies never lay: if it did not actually grow up (aging switched off, failed, or done by another mod), nothing happens
-		if (!chicken.isAlive() || chicken.isBaby() || chicken.eggTime != result.eggTime || !(chicken.level() instanceof ServerLevel level)) {
+		if (!chicken.isAlive() || chicken.isBaby() || Chickens.eggTime(chicken) != result.eggTime || !(chicken.level() instanceof ServerLevel level)) {
 			return;
 		}
-		chicken.eggTime = result.newEggTime;
+		Chickens.setEggTime(chicken, result.newEggTime);
 		int dropped = 0;
 		for (int i = 0; i < result.eggs; i++) {
-			if (chicken.dropFromGiftLootTable(level, BuiltInLootTables.CHICKEN_LAY, chicken::spawnAtLocation)) {
+			if (Chickens.layEgg(chicken, level)) {
 				dropped++;
 			}
 		}

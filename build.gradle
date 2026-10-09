@@ -1,12 +1,11 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
     id 'net.neoforged.moddev' version "${moddev_version}" apply false
     id 'net.minecraftforge.gradle' version "${forgegradle_version}" apply false
 }
 
 tasks.register('build') {
     group = 'build'
-    description = 'Builds the Fabric, NeoForge and Forge jars for the selected Minecraft version (-Pmc=26.2 or 26.3).'
+    description = 'Builds the Fabric, NeoForge and Forge jars for the selected Minecraft version (-Pmc=26.2, 26.3, 1.21.1 or 1.20.1).'
     dependsOn ':Fabric:build', ':NeoForge:build', ':Forge:build'
 }
 
@@ -45,8 +44,11 @@ tasks.register('runVanillaClient') {
 	doLast {
 		def version = mc_version
 		def gameDir = layout.buildDirectory.dir("run/vanilla-${version}").get().asFile
-		def versionFile = new File(minecraftDir, "versions/${version}/${version}.json")
-		if (!versionFile.isFile()) throw new GradleException("Minecraft ${version} is not in your launcher: ${versionFile} is missing")
+		// The launcher's version file, or the copy Fabric Loom downloaded from Mojang for the Fabric build, so a version
+		// need not be installed in the launcher (build it for Fabric first: gradlew :Fabric:downloadAssets -Pmc=<version>)
+		def gradleInfo = new File(gradleCaches, "fabric-loom/${version}/mojang_minecraft_info.json")
+		def versionFile = [new File(minecraftDir, "versions/${version}/${version}.json"), gradleInfo].find { it.isFile() }
+		if (!versionFile) throw new GradleException("Minecraft ${version} is neither in your launcher nor in Fabric Loom's cache")
 		def info = new groovy.json.JsonSlurper().parse(versionFile)
 
 		def classpath = info.libraries.findAll { appliesHere(it.rules) && it.downloads?.artifact }.collect { library ->
@@ -59,7 +61,6 @@ tasks.register('runVanillaClient') {
 		classpath << officialFile("Minecraft ${version}", info.downloads.client.sha1,
 				[new File(minecraftDir, "versions/${version}/${version}.jar"), new File(gradleCaches, "fabric-loom/${version}/minecraft-client.jar")])
 
-		def gradleInfo = new File(gradleCaches, "fabric-loom/${version}/mojang_minecraft_info.json")
 		def assetSha1s = [info.assetIndex.sha1] + (gradleInfo.isFile() ? [new groovy.json.JsonSlurper().parse(gradleInfo).assetIndex.sha1] : [])
 		def assets = [[new File(minecraftDir, 'assets'), info.assetIndex.id], [new File(gradleCaches, 'fabric-loom/assets'), "${version}-${info.assetIndex.id}"]]
 				.find { root, index -> def file = new File(root, "indexes/${index}.json"); file.isFile() && sha1(file) in assetSha1s }
@@ -82,7 +83,10 @@ tasks.register('runVanillaClient') {
 			options.text = ['onboardAccessibility:false', 'skipMultiplayerWarning:true', 'joinedFirstServer:true', 'tutorialStep:none',
 					'pauseOnLostFocus:false', 'soundCategory_master:0.0'].join('\n')
 		}
-		def javaHome = new File(System.getProperty('java.home'), 'bin/java')
+		// The Java version Mojang lists for this release (1.20.1: 17, 1.21.1: 21)
+		def javaHome = project(':Common').javaToolchains.launcherFor {
+			languageVersion = JavaLanguageVersion.of(info.javaVersion?.majorVersion ?: 21)
+		}.get().executablePath.asFile
 		def exitCode = new ProcessBuilder(([javaHome.path, '-Xmx2G'] + jvmArgs + [info.mainClass] + gameArgs)*.toString()).directory(gameDir)
 				// To a file, not inherited: when Gradle has no console nobody drains the pipe and the game freezes on a full buffer
 				.redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.appendTo(new File(gameDir, 'console.log'))).start().waitFor()

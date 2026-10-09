@@ -10,10 +10,8 @@ import dev.romoslayer.elapsed.api.BlockEntityHandler;
 import dev.romoslayer.elapsed.api.BlockHandler;
 import dev.romoslayer.elapsed.api.BlockTarget;
 import dev.romoslayer.elapsed.api.CatchupContext;
-import dev.romoslayer.elapsed.api.ElapsedApi;
 import dev.romoslayer.elapsed.api.EntityHandler;
 import net.minecraft.SharedConstants;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Blocks;
@@ -26,10 +24,10 @@ import org.junit.jupiter.api.Test;
 
 /** F1 from the audit: a handler that throws while being asked what it handles must never escape. */
 class HandlerIsolationTest {
-	private static final Identifier BAD_BLOCK = Identifier.fromNamespaceAndPath("test", "bad_block");
-	private static final Identifier BAD_COST = Identifier.fromNamespaceAndPath("test", "bad_cost");
-	private static final Identifier BAD_BLOCK_ENTITY = Identifier.fromNamespaceAndPath("test", "bad_block_entity");
-	private static final Identifier BAD_ENTITY = Identifier.fromNamespaceAndPath("test", "bad_entity");
+	private static final String BAD_BLOCK = "test:bad_block";
+	private static final String BAD_COST = "test:bad_cost";
+	private static final String BAD_BLOCK_ENTITY = "test:bad_block_entity";
+	private static final String BAD_ENTITY = "test:bad_entity";
 
 	@BeforeAll
 	static void bootstrap() {
@@ -39,10 +37,10 @@ class HandlerIsolationTest {
 
 	@AfterEach
 	void unregister() {
-		ElapsedApi.unregister(BAD_BLOCK);
-		ElapsedApi.unregister(BAD_COST);
-		ElapsedApi.unregister(BAD_BLOCK_ENTITY);
-		ElapsedApi.unregister(BAD_ENTITY);
+		Registrations.unregister(BAD_BLOCK);
+		Registrations.unregister(BAD_COST);
+		Registrations.unregister(BAD_BLOCK_ENTITY);
+		Registrations.unregister(BAD_ENTITY);
 	}
 
 	/** Base for test handlers: does nothing but fail where told to. */
@@ -98,7 +96,7 @@ class HandlerIsolationTest {
 
 	@Test
 	void aThrowingBlockSelectorIsSwitchedOffAndElapsedsOwnHandlerTakesOver() {
-		ElapsedApi.registerBlockHandler(BAD_BLOCK, new ThrowingBlockHandler());
+		Registrations.registerBlockHandler(BAD_BLOCK, new ThrowingBlockHandler());
 		HandlerRegistry registry = HandlerRegistry.build();
 
 		HandlerRegistry.Entry<BlockHandler<?>> wheat = registry.forState(Blocks.WHEAT.defaultBlockState());
@@ -112,7 +110,7 @@ class HandlerIsolationTest {
 
 	@Test
 	void aThrowingCostCountsAsOneAndSwitchesTheHandlerOff() {
-		ElapsedApi.registerBlockHandler(BAD_COST, new ThrowingCostHandler());
+		Registrations.registerBlockHandler(BAD_COST, new ThrowingCostHandler());
 		HandlerRegistry registry = HandlerRegistry.build();
 		HandlerRegistry.Entry<BlockHandler<?>> carrots = registry.forState(Blocks.CARROTS.defaultBlockState());
 		assertNotNull(carrots);
@@ -125,7 +123,7 @@ class HandlerIsolationTest {
 
 	@Test
 	void aThrowingBlockEntitySelectorDoesNotEscape() {
-		ElapsedApi.registerBlockEntityHandler(BAD_BLOCK_ENTITY, new ThrowingBlockEntityHandler());
+		Registrations.registerBlockEntityHandler(BAD_BLOCK_ENTITY, new ThrowingBlockEntityHandler());
 		HandlerRegistry registry = HandlerRegistry.build();
 		// Any block entity will do: the bad handler throws before looking at it, and the built-ins just say no
 		assertNull(registry.forBlockEntity(new net.minecraft.world.level.block.entity.SignBlockEntity(net.minecraft.core.BlockPos.ZERO,
@@ -136,7 +134,7 @@ class HandlerIsolationTest {
 	/** tracks() runs while entities are being saved: it must not throw, whatever a handler does. */
 	@Test
 	void aThrowingEntitySelectorDoesNotBreakSaving() {
-		ElapsedApi.registerEntityHandler(BAD_ENTITY, new ThrowingEntityHandler());
+		Registrations.registerEntityHandler(BAD_ENTITY, new ThrowingEntityHandler());
 		HandlerRegistry registry = HandlerRegistry.build();
 		assertFalse(registry.tracks(null));
 		assertTrue(registry.forEntity(null).isEmpty());
@@ -146,7 +144,7 @@ class HandlerIsolationTest {
 
 	@Test
 	void aReloadGivesAFailedHandlerAnotherChance() {
-		ElapsedApi.registerEntityHandler(BAD_ENTITY, new ThrowingEntityHandler());
+		Registrations.registerEntityHandler(BAD_ENTITY, new ThrowingEntityHandler());
 		HandlerRegistry first = HandlerRegistry.build();
 		first.tracks(null);
 		assertTrue(first.isFailed(BAD_ENTITY));

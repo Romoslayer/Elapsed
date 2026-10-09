@@ -10,8 +10,15 @@ final class FurnaceVersion {
 	static final boolean RESCALES_ON_RELIGHT = true;
 	/** Whether a fuel item's remainder pops out when there is more fuel left in the stack. */
 	static final boolean DROPS_REMAINDER_FROM_STACK = true;
+	/** Whether a burning furnace with an input it has no recipe for drops that input's cooking progress. */
+	static final boolean RESETS_PROGRESS_WITHOUT_RECIPE = false;
 
 	private FurnaceVersion() {
+	}
+
+	/** Whether lighting up swaps the whole fuel stack for its remainder (only Forge and NeoForge before 26.x did). */
+	static boolean swapsFuelForRemainder() {
+		return false;
 	}
 
 	static int burnDuration(AbstractFurnaceBlockEntityAccessor access, ServerLevel level, ItemStack fuel) {

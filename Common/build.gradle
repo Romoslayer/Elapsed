@@ -1,16 +1,27 @@
 plugins {
     id 'multiloader-common'
-    id 'net.neoforged.moddev'
 }
 
-// Plain Minecraft (no loader) so nothing loader-specific can creep into the shared code
-neoForge {
-    neoFormVersion = neoform_version
+// Plain Minecraft (no loader) so nothing loader-specific can creep into the shared code: NeoForm for 26.x and 1.21.x,
+// MCP through ModDevGradle's legacy plugin for 1.20.x (NeoForm does not cover it). A plugins block cannot branch, so the
+// plugin is applied here.
+if (generation == 'mc20') {
+    apply plugin: 'net.neoforged.moddev.legacyforge'
+    legacyForge {
+        enable {
+            mcpVersion = mcp_version
+        }
+    }
+} else {
+    apply plugin: 'net.neoforged.moddev'
+    neoForge {
+        neoFormVersion = neoform_version
+    }
 }
 
 dependencies {
     compileOnly 'org.spongepowered:mixin:0.8.5'
-    // Fabric Loader and NeoForge both bundle MixinExtras
+    // Fabric Loader and NeoForge both bundle MixinExtras (only the 26.x mixins use it)
     compileOnly "io.github.llamalad7:mixinextras-common:${mixinextras_version}"
     annotationProcessor "io.github.llamalad7:mixinextras-common:${mixinextras_version}"
 }
@@ -23,18 +34,27 @@ repositories {
     }
 }
 
-// The few classes that differ between game versions (brewing became data-driven in 26.3) live in
-// src/version/<mc>/java; only the folder for the version being built is compiled.
+// The few classes that differ between 26.2 and 26.3 (brewing became data-driven in 26.3) live in
+// src/version/<mc>/java; only the folder for the version being built is compiled. Differences between Minecraft
+// generations are in src/<generation> (see multiloader-common).
 sourceSets.main.java.srcDir("src/version/${mc_version}/java")
 
 // Tests for the parts that can be checked without a running server (config, maths, handler selection)
 dependencies {
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
+    testImplementation platform('org.junit:junit-bom:5.12.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-neoForge {
-    addModdingDependenciesTo(sourceSets.test)
+// ModDevGradle only puts Minecraft on the main classpath; the tests need it too
+sourceSets.test.compileClasspath += sourceSets.main.compileClasspath
+sourceSets.test.runtimeClasspath += sourceSets.main.compileClasspath
+// Tests that bootstrap the game's registries also load its language file. 26.x keeps it in the game jar; for the older,
+// obfuscated versions it is in a separate resources jar.
+if (generation != 'mc26') {
+    dependencies {
+        testRuntimeOnly files(tasks.named('createMinecraftArtifacts').flatMap { it.resourcesArtifact })
+    }
 }
 
 tasks.named('test', Test) {

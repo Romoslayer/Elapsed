@@ -77,7 +77,7 @@ public final class ElapsedClock {
 	 */
 	public static long downtimeTicks(long realMillisSinceSave, long recoveredGameTicks, long capTicks) {
 		long realTicks = Math.max(0L, realMillisSinceSave) / MILLIS_PER_TICK;
-		return Math.clamp(realTicks - Math.max(0L, recoveredGameTicks), 0L, Math.max(0L, capTicks));
+		return Math.min(Math.max(0L, realTicks - Math.max(0L, recoveredGameTicks)), Math.max(0L, capTicks));
 	}
 
 	/** Called every server tick. While catching up is switched off, the clock stands still. */

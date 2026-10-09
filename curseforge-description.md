@@ -1,17 +1,21 @@
 # Elapsed
 
-**Offline progression for Minecraft servers. Farms, furnaces and animals carry on while nobody is around.**
+**Your base keeps working while you're away. Come back to grown crops, smelted ores and grown-up animals.**
 
-When a chunk unloads, everything in it stops: furnaces stop smelting, crops stop growing, baby animals stop growing up. Elapsed doesn't keep chunks loaded and doesn't simulate them. When a chunk (or an animal) loads again, it works out once how much time passed and what would have happened in that time, and applies the result.
+In vanilla, the moment you walk far enough away, your base freezes: furnaces stop smelting, crops stop growing, baby animals stop growing up. Go mining for an hour and you come home to exactly what you left.
 
-It is **server-side only**: players join with an unmodified client, and nothing needs to be installed on their side.
+Elapsed fixes that. When you come back, your farms, furnaces and animals catch up on the time you were gone, as if you had never left. By default that is the time the world was running; it can also count the time the game or server was closed. It doesn't keep chunks loaded and doesn't simulate anything while you're away, so it costs nothing in the meantime: when a chunk loads again, Elapsed works out once what would have happened and applies the result.
+
+Works in **singleplayer, on LAN and on servers**. On a server it is **server-side only**: players join with an unmodified client and don't need to install anything.
+
+Available for **Minecraft 26.2, 26.3, 1.21.1 and 1.20.1** on Fabric, NeoForge and Forge.
 
 ## What catches up
 
 - **Furnaces, smokers and blast furnaces**: fuel burns and items smelt, stopping when the fuel or input runs out or the output slot is full, exactly when the real furnace would have. The experience is stored in the furnace as usual.
 - **Brewing stands**: brews finish, using up blaze powder and ingredients.
 - **Campfires**: food finishes cooking and pops off, once.
-- **Crops and plants**: wheat, carrots, potatoes, beetroot, torchflowers, melon and pumpkin stems (and their fruit), nether wart, cocoa, sweet berries, sugar cane, cactus (and its flower), bamboo, kelp, and weeping, twisting and cave vines. Growth follows the game's own growth chances, and only happens where the plant could grow right now (enough light, the right ground, room above).
+- **Crops and plants**: wheat, carrots, potatoes, beetroot, torchflowers, melon and pumpkin stems (and their fruit), nether wart, cocoa, sweet berries, sugar cane, cactus (and its flower, on 26.x), bamboo, kelp, and weeping, twisting and cave vines. Growth follows the game's own growth chances, and only happens where the plant could grow right now (enough light, the right ground, room above).
 - **Saplings**: move on to their second stage; the tree itself is grown by the game as usual.
 - **Copper**: oxidises, following the game's rule that nearby younger copper slows it down. Waxed copper never changes.
 - **Animals**: babies grow up, breeding cooldowns and love mode run out. Nothing is ever bred, and animals never move or fight because of Elapsed.

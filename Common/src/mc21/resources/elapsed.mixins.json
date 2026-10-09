@@ -1,0 +1,21 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "dev.romoslayer.elapsed.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"ChunkSerializerMixin",
+		"EntityMixin",
+		"LevelChunkMixin",
+		"access.AbstractFurnaceBlockEntityAccessor",
+		"access.BambooStalkBlockInvoker",
+		"access.BrewingStandBlockEntityAccessor",
+		"access.CampfireBlockEntityAccessor",
+		"access.GrowingPlantBlockAccessor",
+		"access.GrowingPlantHeadBlockAccessor",
+		"access.StemBlockAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

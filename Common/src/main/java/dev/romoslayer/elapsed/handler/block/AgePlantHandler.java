@@ -7,8 +7,9 @@ import dev.romoslayer.elapsed.api.CatchupCategory;
 import dev.romoslayer.elapsed.api.CatchupContext;
 import dev.romoslayer.elapsed.api.ElapsedApi;
 import dev.romoslayer.elapsed.config.ElapsedConfig;
+import dev.romoslayer.elapsed.core.Registrations;
 import dev.romoslayer.elapsed.handler.Growth;
-import dev.romoslayer.elapsed.mixin.access.StemBlockAccessor;
+import dev.romoslayer.elapsed.mc.Versioned;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -17,12 +18,8 @@ import java.util.Map;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.BeetrootBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.CocoaBlock;
@@ -47,7 +44,7 @@ public final class AgePlantHandler implements BlockHandler<AgePlantHandler.Plant
 	private static final double TWO_THIRDS = 2.0 / 3.0;
 
 	private final Map<Block, Optional<Rule>> rules = Collections.synchronizedMap(new IdentityHashMap<>());
-	private final Map<Block, ElapsedApi.AgeRule> extraRules;
+	private final Map<Block, Registrations.AgeRule> extraRules;
 
 	private enum Light {
 		NONE, AT, ABOVE
@@ -73,23 +70,22 @@ public final class AgePlantHandler implements BlockHandler<AgePlantHandler.Plant
 	public record Plant(BlockPos pos, BlockState state, Rule rule, int age, double chancePerRandomTick, int freeSides, int newAge, boolean fruit) {
 	}
 
-	public AgePlantHandler(Map<Block, ElapsedApi.AgeRule> extraRules) {
+	public AgePlantHandler(Map<Block, Registrations.AgeRule> extraRules) {
 		this.extraRules = extraRules;
 	}
 
 	/** Builds the extra rules from the API registrations and the config, the config winning. */
-	public static Map<Block, ElapsedApi.AgeRule> extraRules() {
-		Map<Block, ElapsedApi.AgeRule> rules = new IdentityHashMap<>(ElapsedApi.ageRules());
+	public static Map<Block, Registrations.AgeRule> extraRules() {
+		Map<Block, Registrations.AgeRule> rules = new IdentityHashMap<>(Registrations.ageRules());
 		for (Map.Entry<String, ElapsedConfig.AgeBlock> entry : ElapsedConfig.get().ageBasedBlocks.entrySet()) {
-			Identifier id = Identifier.tryParse(entry.getKey());
-			Optional<Block> block = id == null ? Optional.empty() : BuiltInRegistries.BLOCK.getOptional(id);
+			Optional<Block> block = Versioned.block(entry.getKey());
 			if (block.isEmpty()) {
 				// Probably a mod that is not installed
 				continue;
 			}
 			Property<?> property = block.get().getStateDefinition().getProperty(entry.getValue().property);
 			if (property instanceof IntegerProperty integer) {
-				rules.put(block.get(), new ElapsedApi.AgeRule(integer, entry.getValue().growthChance, entry.getValue().minLight));
+				rules.put(block.get(), new Registrations.AgeRule(integer, entry.getValue().growthChance, entry.getValue().minLight));
 			} else {
 				Elapsed.LOGGER.warn("ageBasedBlocks: {} has no number property called \"{}\"; skipping it", entry.getKey(), entry.getValue().property);
 			}
@@ -112,7 +108,7 @@ public final class AgePlantHandler implements BlockHandler<AgePlantHandler.Plant
 	}
 
 	private Optional<Rule> findRule(Block block) {
-		ElapsedApi.AgeRule extra = this.extraRules.get(block);
+		Registrations.AgeRule extra = this.extraRules.get(block);
 		if (extra != null) {
 			int max = Collections.max(extra.property().getPossibleValues());
 			return Optional.of(new Rule(null, extra.property(), max, extra.growthChance(), 1.0, extra.minLight() > 0 ? Light.AT : Light.NONE, extra.minLight(), false));
@@ -223,13 +219,12 @@ public final class AgePlantHandler implements BlockHandler<AgePlantHandler.Plant
 
 	/** Sides of a stem where fruit can grow: air, on ground that carries it, all in loaded chunks. */
 	private static List<Direction> freeSides(BlockPos pos, StemBlock stem, CatchupContext context) {
-		TagKey<Block> support = ((StemBlockAccessor) stem).elapsed$fruitSupportBlocks();
 		List<Direction> free = new ArrayList<>(4);
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
 			BlockPos side = pos.relative(direction);
 			BlockState sideState = context.loadedBlockState(side);
 			BlockState ground = context.loadedBlockState(side.below());
-			if (sideState != null && ground != null && sideState.isAir() && ground.is(support)) {
+			if (sideState != null && ground != null && sideState.isAir() && Stems.supportsFruit(stem, ground)) {
 				free.add(direction);
 			}
 		}
@@ -238,10 +233,8 @@ public final class AgePlantHandler implements BlockHandler<AgePlantHandler.Plant
 
 	/** Grows fruit on one of the sides that still has room for it, chosen at random as the game does. */
 	private void growFruit(ServerLevel level, BlockPos pos, StemBlock stem, CatchupContext context) {
-		StemBlockAccessor access = (StemBlockAccessor) stem;
-		Registry<Block> blocks = level.registryAccess().lookupOrThrow(Registries.BLOCK);
-		Optional<Block> fruit = blocks.getOptional(access.elapsed$fruit());
-		Optional<Block> attached = blocks.getOptional(access.elapsed$attachedStem());
+		Optional<Block> fruit = Stems.fruit(stem, level);
+		Optional<Block> attached = Stems.attachedStem(stem, level);
 		List<Direction> free = freeSides(pos, stem, context);
 		if (fruit.isEmpty() || attached.isEmpty() || free.isEmpty()) {
 			return;

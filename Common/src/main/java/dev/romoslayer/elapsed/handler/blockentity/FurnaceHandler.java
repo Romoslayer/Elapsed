@@ -1,13 +1,14 @@
 package dev.romoslayer.elapsed.handler.blockentity;
 
-import dev.romoslayer.elapsed.Elapsed;
 import dev.romoslayer.elapsed.api.BlockEntityHandler;
 import dev.romoslayer.elapsed.api.CatchupCategory;
 import dev.romoslayer.elapsed.api.CatchupContext;
 import dev.romoslayer.elapsed.config.ElapsedConfig;
+import dev.romoslayer.elapsed.handler.blockentity.Cooking.FurnaceRecipe;
+import dev.romoslayer.elapsed.mc.Versioned;
 import dev.romoslayer.elapsed.mixin.access.AbstractFurnaceBlockEntityAccessor;
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.core.BlockPos;
@@ -16,11 +17,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.AbstractCookingRecipe;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
@@ -56,7 +53,7 @@ public final class FurnaceHandler implements BlockEntityHandler<FurnaceHandler.F
 		int cookingTotalTime;
 		float speedMultiplier;
 		final int maxStackSize;
-		final Map<RecipeHolder<? extends AbstractCookingRecipe>, Integer> recipesUsed = new IdentityHashMap<>();
+		final Map<FurnaceRecipe, Integer> recipesUsed = new HashMap<>();
 		final List<ItemStack> drops = new ArrayList<>();
 		int cooked;
 		int fuelUsed;
@@ -128,8 +125,8 @@ public final class FurnaceHandler implements BlockEntityHandler<FurnaceHandler.F
 		while (remaining > 0 && steps++ < MAX_STEPS) {
 			ItemStack input = f.items.get(SLOT_INPUT);
 			ItemStack fuel = f.items.get(SLOT_FUEL);
-			RecipeHolder<? extends AbstractCookingRecipe> recipe = input.isEmpty() ? null : recipe(access, level, input);
-			ItemStack result = recipe == null ? ItemStack.EMPTY : recipe.value().assemble(new SingleRecipeInput(input));
+			FurnaceRecipe recipe = input.isEmpty() ? null : Cooking.furnaceRecipe(access, level, input);
+			ItemStack result = recipe == null ? ItemStack.EMPTY : Cooking.result(recipe, input, level);
 			boolean canCook = recipe != null && !result.isEmpty() && canBurn(f, result);
 			if (f.litTimeRemaining >= 2) {
 				// Burning, and still burning after the next tick: jump to just before the fuel runs out or an item finishes
@@ -144,8 +141,8 @@ public final class FurnaceHandler implements BlockEntityHandler<FurnaceHandler.F
 					f.litTimeRemaining -= (int) jump;
 					if (canCook) {
 						f.cookingTimer += (int) jump;
-					} else if (input.isEmpty() || recipe != null) {
-						// No input, or a recipe that cannot finish: progress is lost (an input without a recipe keeps it)
+					} else if (input.isEmpty() || recipe != null || FurnaceVersion.RESETS_PROGRESS_WITHOUT_RECIPE) {
+						// No input, or a recipe that cannot finish: progress is lost (26.x keeps it for an input without a recipe)
 						f.cookingTimer = 0;
 					}
 					remaining -= jump;
@@ -165,7 +162,7 @@ public final class FurnaceHandler implements BlockEntityHandler<FurnaceHandler.F
 				continue;
 			} else if (f.litTimeRemaining == 0 && !canCook) {
 				// Fuel and input but nothing to make (or no room for it): it never lights
-				if (recipe != null && f.cookingTimer != 0) {
+				if ((recipe != null || FurnaceVersion.RESETS_PROGRESS_WITHOUT_RECIPE) && f.cookingTimer != 0) {
 					f.cookingTimer = 0;
 					changed = true;
 				}
@@ -185,7 +182,7 @@ public final class FurnaceHandler implements BlockEntityHandler<FurnaceHandler.F
 
 	/** One tick of AbstractFurnaceBlockEntity.serverTick, on the copy. */
 	private void tick(AbstractFurnaceBlockEntityAccessor access, ServerLevel level, Furnace f, ItemStack input,
-			@Nullable RecipeHolder<? extends AbstractCookingRecipe> recipe, ItemStack result, boolean canCook) {
+			@Nullable FurnaceRecipe recipe, ItemStack result, boolean canCook) {
 		boolean isLit;
 		if (f.litTimeRemaining > 0) {
 			f.litTimeRemaining--;
@@ -231,6 +228,8 @@ public final class FurnaceHandler implements BlockEntityHandler<FurnaceHandler.F
 					} else {
 						f.cookingTimer = 0;
 					}
+				} else if (FurnaceVersion.RESETS_PROGRESS_WITHOUT_RECIPE) {
+					f.cookingTimer = 0;
 				}
 			} else {
 				f.cookingTimer = 0;
@@ -240,35 +239,36 @@ public final class FurnaceHandler implements BlockEntityHandler<FurnaceHandler.F
 		}
 	}
 
-	private static @Nullable RecipeHolder<? extends AbstractCookingRecipe> recipe(AbstractFurnaceBlockEntityAccessor access, ServerLevel level, ItemStack input) {
-		return access.elapsed$quickCheck().getRecipeFor(new SingleRecipeInput(input), level).orElse(null);
-	}
-
 	private static boolean canBurn(Furnace f, ItemStack result) {
 		ItemStack output = f.items.get(SLOT_RESULT);
 		if (output.isEmpty()) {
 			return true;
 		}
-		if (!ItemStack.isSameItemSameComponents(output, result)) {
+		if (!Cooking.stacksWith(output, result)) {
 			return false;
 		}
 		return output.getCount() + result.getCount() <= Math.min(f.maxStackSize, result.getMaxStackSize());
 	}
 
-	private static int totalCookTime(RecipeHolder<? extends AbstractCookingRecipe> recipe, Furnace f) {
-		int time = recipe.value().cookingTime();
+	private static int totalCookTime(FurnaceRecipe recipe, Furnace f) {
+		int time = Cooking.cookingTime(recipe);
 		return f.speedMultiplier > 0.0F ? (int) Math.ceil(time / f.speedMultiplier) : time;
 	}
 
 	private static void consumeFuel(Furnace f, ItemStack fuel) {
-		ItemStackTemplate remainder = Elapsed.platform().craftingRemainder(fuel);
+		ItemStack remainder = Versioned.craftingRemainder(fuel);
 		ItemStack newFuel = fuel;
-		fuel.shrink(1);
-		if (remainder != null) {
-			if (fuel.isEmpty()) {
-				newFuel = remainder.create();
-			} else if (FurnaceVersion.DROPS_REMAINDER_FROM_STACK) {
-				f.drops.add(remainder.create());
+		if (remainder != null && FurnaceVersion.swapsFuelForRemainder()) {
+			// The whole slot becomes the remainder, however many fuel items were in it
+			newFuel = remainder;
+		} else {
+			fuel.shrink(1);
+			if (remainder != null) {
+				if (fuel.isEmpty()) {
+					newFuel = remainder;
+				} else if (FurnaceVersion.DROPS_REMAINDER_FROM_STACK) {
+					f.drops.add(remainder);
+				}
 			}
 		}
 		f.items.set(SLOT_FUEL, newFuel);
@@ -301,7 +301,7 @@ public final class FurnaceHandler implements BlockEntityHandler<FurnaceHandler.F
 		access.elapsed$setCookingTotalTime(result.cookingTotalTime);
 		FurnaceVersion.setStoredSpeed(access, result.speedMultiplier);
 		// Experience for the smelted items is waiting in the furnace, as usual
-		result.recipesUsed.forEach((recipe, count) -> access.elapsed$recipesUsed().addTo(recipe.id(), count));
+		result.recipesUsed.forEach((recipe, count) -> Cooking.addUsed(access, recipe, count));
 		ServerLevel level = context.level();
 		BlockPos pos = target.getBlockPos();
 		for (ItemStack drop : result.drops) {

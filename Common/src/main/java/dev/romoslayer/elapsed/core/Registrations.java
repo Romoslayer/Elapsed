@@ -1,71 +1,61 @@
-package dev.romoslayer.elapsed.api;
+package dev.romoslayer.elapsed.core;
 
 import dev.romoslayer.elapsed.Elapsed;
-import dev.romoslayer.elapsed.core.CatchupManager;
+import dev.romoslayer.elapsed.api.BlockEntityHandler;
+import dev.romoslayer.elapsed.api.BlockHandler;
+import dev.romoslayer.elapsed.api.EntityHandler;
+import dev.romoslayer.elapsed.api.GrowthRateProvider;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
-import net.minecraft.world.level.chunk.LevelChunk;
 
 /**
- * The supported way for other mods to add their own systems to Elapsed. Everything here must be called on the server
- * thread (registering during mod setup is fine too).
- *
- * <p>To stay independent of Elapsed, guard calls with your loader's "is mod loaded" check (mod id {@code elapsed})
- * and keep them in a class that is only loaded when it is present.
- *
- * <p>Handlers registered here are tried before Elapsed's own, so a mod can take over its own blocks. Server owners
- * can switch any handler off by its id in config/elapsed.toml.
+ * Everything registered through {@link dev.romoslayer.elapsed.api.ElapsedApi}, which is only a front for this class
+ * (its ids are Minecraft id objects, whose class is named differently in each Minecraft version). Ids are kept here as
+ * "namespace:path".
  */
-public final class ElapsedApi {
-	private static final Map<Identifier, BlockHandler<?>> BLOCK_HANDLERS = new LinkedHashMap<>();
-	private static final Map<Identifier, BlockEntityHandler<?>> BLOCK_ENTITY_HANDLERS = new LinkedHashMap<>();
-	private static final Map<Identifier, EntityHandler<?>> ENTITY_HANDLERS = new LinkedHashMap<>();
+public final class Registrations {
+	private static final Map<String, BlockHandler<?>> BLOCK_HANDLERS = new LinkedHashMap<>();
+	private static final Map<String, BlockEntityHandler<?>> BLOCK_ENTITY_HANDLERS = new LinkedHashMap<>();
+	private static final Map<String, EntityHandler<?>> ENTITY_HANDLERS = new LinkedHashMap<>();
 	private static final Map<Block, AgeRule> AGE_RULES = new LinkedHashMap<>();
-	private static final Map<Identifier, GrowthRateProvider> GROWTH_PROVIDERS = new LinkedHashMap<>();
-	private static volatile List<Map.Entry<Identifier, GrowthRateProvider>> growthProviderList = List.of();
+	private static final Map<String, GrowthRateProvider> GROWTH_PROVIDERS = new LinkedHashMap<>();
+	private static volatile List<Map.Entry<String, GrowthRateProvider>> growthProviderList = List.of();
 	// Providers that threw or returned nonsense; switched off until registered again
-	private static final Set<Identifier> FAILED_PROVIDERS = ConcurrentHashMap.newKeySet();
+	private static final Set<String> FAILED_PROVIDERS = ConcurrentHashMap.newKeySet();
 	/** Highest combined growth speed accepted from providers (beyond it every plant would be grown at once). */
 	private static final double MAX_GROWTH_MULTIPLIER = 100.0;
 	private static volatile int generation;
 
-	private ElapsedApi() {
+	private Registrations() {
 	}
 
 	/** A block that grows by counting up an age property on random ticks. */
 	public record AgeRule(IntegerProperty property, double growthChance, int minLight) {
 	}
 
-	public static synchronized void registerBlockHandler(Identifier id, BlockHandler<?> handler) {
+	public static synchronized void registerBlockHandler(String id, BlockHandler<?> handler) {
 		BLOCK_HANDLERS.put(id, handler);
 		changed();
 	}
 
-	public static synchronized void registerBlockEntityHandler(Identifier id, BlockEntityHandler<?> handler) {
+	public static synchronized void registerBlockEntityHandler(String id, BlockEntityHandler<?> handler) {
 		BLOCK_ENTITY_HANDLERS.put(id, handler);
 		changed();
 	}
 
-	public static synchronized void registerEntityHandler(Identifier id, EntityHandler<?> handler) {
+	public static synchronized void registerEntityHandler(String id, EntityHandler<?> handler) {
 		ENTITY_HANDLERS.put(id, handler);
 		changed();
 	}
 
-	/**
-	 * The simplest way to support a crop: it grows one stage whenever a random tick succeeds with the given chance,
-	 * needs at least {@code minLight} (0 for none) and must be able to survive where it is.
-	 */
 	public static synchronized void registerAgeProperty(Block block, IntegerProperty property, double growthChance, int minLight) {
 		if (!block.getStateDefinition().getProperties().contains(property)) {
 			throw new IllegalArgumentException(property.getName() + " is not a property of " + block);
@@ -80,14 +70,13 @@ public final class ElapsedApi {
 		changed();
 	}
 
-	public static synchronized void registerGrowthRateProvider(Identifier id, GrowthRateProvider provider) {
+	public static synchronized void registerGrowthRateProvider(String id, GrowthRateProvider provider) {
 		GROWTH_PROVIDERS.put(id, provider);
 		FAILED_PROVIDERS.remove(id);
 		growthProviderList = providerSnapshot();
 	}
 
-	/** Removes whatever handler or growth provider was registered under this id. */
-	public static synchronized void unregister(Identifier id) {
+	public static synchronized void unregister(String id) {
 		BLOCK_HANDLERS.remove(id);
 		BLOCK_ENTITY_HANDLERS.remove(id);
 		ENTITY_HANDLERS.remove(id);
@@ -99,34 +88,18 @@ public final class ElapsedApi {
 
 	/** Whether a growth provider from the given mod (by id namespace) is registered. */
 	public static synchronized boolean hasGrowthRateProviderFrom(String namespace) {
-		return GROWTH_PROVIDERS.keySet().stream().anyMatch(id -> id.getNamespace().equals(namespace));
+		return GROWTH_PROVIDERS.keySet().stream().anyMatch(id -> id.startsWith(namespace + ":"));
 	}
 
-	/** Time a loaded chunk is still waiting to catch up on. Empty when nothing is pending. */
-	public static OptionalLong pendingTicks(LevelChunk chunk) {
-		CatchupManager manager = Elapsed.manager();
-		long debt = manager == null ? 0 : CatchupManager.pendingTicks(chunk);
-		return debt > 0 ? OptionalLong.of(debt) : OptionalLong.empty();
-	}
-
-	/** Time a loaded entity is still waiting to catch up on. Empty when nothing is pending. */
-	public static OptionalLong pendingTicks(Entity entity) {
-		CatchupManager manager = Elapsed.manager();
-		long debt = manager == null ? 0 : CatchupManager.pendingTicks(entity);
-		return debt > 0 ? OptionalLong.of(debt) : OptionalLong.empty();
-	}
-
-	// ---- For Elapsed itself
-
-	public static synchronized Map<Identifier, BlockHandler<?>> blockHandlers() {
+	public static synchronized Map<String, BlockHandler<?>> blockHandlers() {
 		return new LinkedHashMap<>(BLOCK_HANDLERS);
 	}
 
-	public static synchronized Map<Identifier, BlockEntityHandler<?>> blockEntityHandlers() {
+	public static synchronized Map<String, BlockEntityHandler<?>> blockEntityHandlers() {
 		return new LinkedHashMap<>(BLOCK_ENTITY_HANDLERS);
 	}
 
-	public static synchronized Map<Identifier, EntityHandler<?>> entityHandlers() {
+	public static synchronized Map<String, EntityHandler<?>> entityHandlers() {
 		return new LinkedHashMap<>(ENTITY_HANDLERS);
 	}
 
@@ -139,10 +112,11 @@ public final class ElapsedApi {
 		return generation;
 	}
 
-	static double combinedGrowthMultiplier(ServerLevel level, BlockPos pos, BlockState state, long elapsedTicks) {
+	/** The growth speed every registered provider agrees on (their results multiplied), 1 when there are none. */
+	public static double combinedGrowthMultiplier(ServerLevel level, BlockPos pos, BlockState state, long elapsedTicks) {
 		double multiplier = 1.0;
-		for (Map.Entry<Identifier, GrowthRateProvider> entry : growthProviderList) {
-			Identifier id = entry.getKey();
+		for (Map.Entry<String, GrowthRateProvider> entry : growthProviderList) {
+			String id = entry.getKey();
 			if (FAILED_PROVIDERS.contains(id)) {
 				continue;
 			}
@@ -167,7 +141,7 @@ public final class ElapsedApi {
 		return Math.min(multiplier, MAX_GROWTH_MULTIPLIER);
 	}
 
-	private static List<Map.Entry<Identifier, GrowthRateProvider>> providerSnapshot() {
+	private static List<Map.Entry<String, GrowthRateProvider>> providerSnapshot() {
 		return GROWTH_PROVIDERS.entrySet().stream().map(entry -> Map.entry(entry.getKey(), entry.getValue())).toList();
 	}
 

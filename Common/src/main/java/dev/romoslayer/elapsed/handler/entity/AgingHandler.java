@@ -4,6 +4,7 @@ import dev.romoslayer.elapsed.api.CatchupCategory;
 import dev.romoslayer.elapsed.api.CatchupContext;
 import dev.romoslayer.elapsed.api.EntityHandler;
 import dev.romoslayer.elapsed.config.ElapsedConfig;
+import dev.romoslayer.elapsed.mc.Versioned;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.Entity;
@@ -67,7 +68,7 @@ public final class AgingHandler implements EntityHandler<AgingHandler.Ages> {
 		if (!mob.isAlive() || mob.getAge() != result.age) {
 			return;
 		}
-		boolean grows = result.age < 0 && mob.canAgeUp();
+		boolean grows = result.age < 0 && Versioned.canAgeUp(mob);
 		if (grows || result.age > 0) {
 			mob.setAge(result.newAge);
 		}

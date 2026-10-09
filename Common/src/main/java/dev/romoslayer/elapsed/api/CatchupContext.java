@@ -1,5 +1,7 @@
 package dev.romoslayer.elapsed.api;
 
+import dev.romoslayer.elapsed.core.Registrations;
+import dev.romoslayer.elapsed.mc.Versioned;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -8,7 +10,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.gamerules.GameRules;
 import org.jspecify.annotations.Nullable;
 
 /** What a handler may know about the catch-up it is part of. One context covers one chunk or one entity. */
@@ -42,7 +43,7 @@ public final class CatchupContext {
 	/** The chance that a given block receives a random tick in one game tick (random_tick_speed / 4096). */
 	public double randomTickChance() {
 		if (this.randomTickChance < 0.0) {
-			int speed = this.level.getGameRules().get(GameRules.RANDOM_TICK_SPEED);
+			int speed = Versioned.randomTickSpeed(this.level);
 			this.randomTickChance = Math.max(0, speed) / 4096.0;
 		}
 		return this.randomTickChance;
@@ -53,7 +54,7 @@ public final class CatchupContext {
 	 * (seasons and the like), 1 when none has an opinion.
 	 */
 	public double growthMultiplier(BlockPos pos, BlockState state, long elapsedTicks) {
-		return ElapsedApi.combinedGrowthMultiplier(this.level, pos, state, elapsedTicks);
+		return Registrations.combinedGrowthMultiplier(this.level, pos, state, elapsedTicks);
 	}
 
 	/** The block at a position if its chunk is loaded, otherwise null. Never loads or generates a chunk. */

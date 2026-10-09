@@ -1,19 +1,16 @@
 package dev.romoslayer.elapsed.mixin;
 
-import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import com.llamalad7.mixinextras.sugar.Local;
-import dev.romoslayer.elapsed.core.ElapsedChunk;
 import dev.romoslayer.elapsed.core.Timestamps;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.ImposterProtoChunk;
 import net.minecraft.world.level.chunk.ProtoChunk;
+import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
-import net.minecraft.world.level.chunk.storage.SerializableChunkData;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -25,22 +22,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * chunk loads. Because the timestamp is taken at the same moment as the blocks and block entities, the state on disk
  * and the time it describes can never disagree.
  */
-@Mixin(SerializableChunkData.class)
-public abstract class SerializableChunkDataMixin {
-	@Shadow
-	public abstract long lastUpdateTime();
+@Mixin(ChunkSerializer.class)
+public abstract class ChunkSerializerMixin {
+	@Unique
+	private static final String LAST_UPDATE = "LastUpdate";
 
-	// The first getGameTime() call is for the scheduled ticks; the second is the LastUpdate value
-	@ModifyExpressionValue(method = "copyOf", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getGameTime()J", ordinal = 1))
-	private static long elapsed$stampChunk(long gameTime, @Local(argsOnly = true) ServerLevel level, @Local(argsOnly = true) ChunkAccess chunk) {
-		return Timestamps.chunkStamp(level, chunk, gameTime);
+	@Inject(method = "write", at = @At("RETURN"))
+	private static void elapsed$stampChunk(ServerLevel level, ChunkAccess chunk, CallbackInfoReturnable<CompoundTag> cir) {
+		CompoundTag tag = cir.getReturnValue();
+		tag.putLong(LAST_UPDATE, Timestamps.chunkStamp(level, chunk, tag.getLong(LAST_UPDATE)));
 	}
 
 	@Inject(method = "read", at = @At("RETURN"))
-	private void elapsed$readStamp(ServerLevel level, PoiManager poiManager, RegionStorageInfo regionInfo, ChunkPos pos,
+	private static void elapsed$readStamp(ServerLevel level, PoiManager poiManager, RegionStorageInfo regionInfo, ChunkPos pos, CompoundTag tag,
 			CallbackInfoReturnable<ProtoChunk> cir) {
-		if (cir.getReturnValue() instanceof ImposterProtoChunk imposter && imposter.getWrapped() instanceof ElapsedChunk chunk) {
-			chunk.elapsed$setDebt(Timestamps.debtFromStamp(level, this.lastUpdateTime()));
-		}
+		Timestamps.readChunkStamp(level, cir.getReturnValue(), tag.getLong(LAST_UPDATE));
 	}
 }

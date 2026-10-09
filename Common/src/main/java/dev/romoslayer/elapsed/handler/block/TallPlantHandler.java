@@ -7,10 +7,10 @@ import dev.romoslayer.elapsed.api.CatchupCategory;
 import dev.romoslayer.elapsed.api.CatchupContext;
 import dev.romoslayer.elapsed.config.ElapsedConfig;
 import dev.romoslayer.elapsed.handler.Growth;
+import dev.romoslayer.elapsed.mc.Versioned;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CactusBlock;
 import net.minecraft.world.level.block.SugarCaneBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -20,8 +20,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Sugar cane and cactus. Only the top block of a column grows: every random tick it counts its age up, and at the
  * sixteenth it puts a new block on top, until the column is three high. Cactus can grow a flower instead when it is
- * half way there. The growth steps are drawn for the whole elapsed time and then placed one by one, each placement
- * checked against the world as it is now.
+ * half way there (Minecraft 26.x; before 1.21.5 a cactus grows exactly like sugar cane). The growth steps are drawn for
+ * the whole elapsed time and then placed one by one, each placement checked against the world as it is now.
  */
 public final class TallPlantHandler implements BlockHandler<TallPlantHandler.Column> {
 	private static final int MAX_HEIGHT = 3;
@@ -72,8 +72,10 @@ public final class TallPlantHandler implements BlockHandler<TallPlantHandler.Col
 		}
 		int age = target.state().getValue(BlockStateProperties.AGE_15);
 		boolean cactus = block instanceof CactusBlock;
+		// Only a cactus that can flower keeps ageing once its column is full height
+		boolean flowering = cactus && Versioned.cactusFlower() != null;
 		// A full-grown cactus at full height stops; sugar cane at full height does nothing at all
-		if (height >= MAX_HEIGHT && (!cactus || age == MAX_AGE)) {
+		if (height >= MAX_HEIGHT && (!flowering || age == MAX_AGE)) {
 			return null;
 		}
 		// Free space above the top, one more than the column can grow (a cactus at full height can still flower)
@@ -93,7 +95,8 @@ public final class TallPlantHandler implements BlockHandler<TallPlantHandler.Col
 
 	@Override
 	public @Nullable Column calculateProgress(Column column, long elapsedTicks, CatchupContext context) {
-		boolean cactus = column.block instanceof CactusBlock;
+		// Without cactus flowers (before 1.21.5) a cactus follows the sugar cane rules
+		boolean cactus = column.block instanceof CactusBlock && Versioned.cactusFlower() != null;
 		double rate = Growth.plantRate(context, column.pos, column.block.defaultBlockState(), elapsedTicks, 1.0);
 		int steps = Growth.sampleEvents(context.random(), rate, elapsedTicks, MAX_STEPS);
 		int height = column.height;
@@ -176,11 +179,12 @@ public final class TallPlantHandler implements BlockHandler<TallPlantHandler.Col
 			level.setBlock(top, topState.setValue(BlockStateProperties.AGE_15, topAge), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
 		}
 		boolean flowered = false;
-		if (result.flower && placed == result.newBlocks) {
+		BlockState flowerState = Versioned.cactusFlower();
+		if (result.flower && flowerState != null && placed == result.newBlocks) {
 			BlockPos above = top.above();
 			BlockState space = context.loadedBlockState(above);
 			if (space != null && space.isAir() && result.block.defaultBlockState().canSurvive(level, above)) {
-				level.setBlockAndUpdate(above, Blocks.CACTUS_FLOWER.defaultBlockState());
+				level.setBlockAndUpdate(above, flowerState);
 				flowered = true;
 			}
 		}
