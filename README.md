@@ -141,4 +141,7 @@ between 26.2 and 26.3 are in `Common/src/version/<mc>/java`.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[PolyForm Shield 1.0.0](LICENSE). In short: you may use Elapsed for anything, change it, include it in modpacks and
+share it, as long as you keep the license and notices with it, but not to make or offer something that competes with
+Elapsed (such as a re-upload or a copy under another name). The license text is what counts; this summary is not a
+substitute for it.
