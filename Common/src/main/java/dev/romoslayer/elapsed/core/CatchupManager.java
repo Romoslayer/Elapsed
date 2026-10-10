@@ -65,13 +65,7 @@ public final class CatchupManager {
 	private long entitiesCaughtUp;
 	private long worstTickNanos;
 	private long longestWaitTicks;
-	private int burstTicks;
-	private int burstChunks;
-	private int burstEntities;
-	private long burstOperations;
-	private long burstNanos;
-	private long burstWorstNanos;
-	private long burstLongestWait;
+	private final BurstTracker burst = new BurstTracker();
 	private @Nullable Burst lastBurst;
 
 	/** A queued chunk or entity, and the tick it was first ready to be caught up (for measuring the delay). */
@@ -267,7 +261,7 @@ public final class CatchupManager {
 	private void recordWait(Pending<?> pending, long now) {
 		// readySince is only set by the previous visit; a first-visit catch-up waited no time at all
 		long wait = pending.readySince < 0 ? 0L : now - pending.readySince;
-		this.burstLongestWait = Math.max(this.burstLongestWait, wait);
+		this.burst.waited(wait);
 		this.longestWaitTicks = Math.max(this.longestWaitTicks, wait);
 	}
 
@@ -275,28 +269,16 @@ public final class CatchupManager {
 	private void recordTick(int chunks, int entities, long operations, long nanos) {
 		this.markReady();
 		if (chunks == 0 && entities == 0) {
-			if (this.burstTicks > 0) {
-				this.lastBurst = new Burst(this.burstTicks, this.burstChunks, this.burstEntities, this.burstOperations, this.burstNanos,
-						this.burstWorstNanos, this.burstLongestWait);
+			Burst finished = this.burst.finish();
+			if (finished != null) {
+				this.lastBurst = finished;
 				if (this.isDebug()) {
-					Elapsed.LOGGER.info("[Elapsed] Catch-up burst done: {}", this.lastBurst);
+					Elapsed.LOGGER.info("[Elapsed] Catch-up burst done: {}", finished);
 				}
-				this.burstTicks = 0;
-				this.burstChunks = 0;
-				this.burstEntities = 0;
-				this.burstOperations = 0;
-				this.burstNanos = 0L;
-				this.burstWorstNanos = 0L;
-				this.burstLongestWait = 0L;
 			}
 			return;
 		}
-		this.burstTicks++;
-		this.burstChunks += chunks;
-		this.burstEntities += entities;
-		this.burstOperations += operations;
-		this.burstNanos += nanos;
-		this.burstWorstNanos = Math.max(this.burstWorstNanos, nanos);
+		this.burst.tick(chunks, entities, operations, nanos);
 		this.worstTickNanos = Math.max(this.worstTickNanos, nanos);
 	}
 
@@ -319,13 +301,68 @@ public final class CatchupManager {
 		}
 	}
 
-	/** A run of consecutive ticks in which something was caught up. */
-	public record Burst(int ticks, int chunks, int entities, long operations, long nanos, long worstTickNanos, long longestWaitTicks) {
+	/**
+	 * A run of consecutive ticks in which something was caught up. {@code operations} and {@code nanos} are the whole
+	 * run's; {@code worstTickOperations} is the work done in the slowest tick, which tells a tick that did too much
+	 * (near or over the per-tick limit) from one that was slow for some other reason.
+	 */
+	public record Burst(int ticks, int chunks, int entities, long operations, long nanos, long worstTickNanos, long worstTickOperations,
+			long longestWaitTicks) {
 		@Override
 		public String toString() {
 			return String.format(Locale.ROOT,
-					"%d chunk(s) and %d entity(s) over %d tick(s), %.1f ms in total, worst tick %.2f ms (%d operations), longest wait %d tick(s)",
-					this.chunks, this.entities, this.ticks, this.nanos / 1.0e6, this.worstTickNanos / 1.0e6, this.operations, this.longestWaitTicks);
+					"%d chunk(s) and %d entity(s) over %d tick(s), %.1f ms and %d operations in total, worst tick %.2f ms (%d operations), longest wait %d tick(s)",
+					this.chunks, this.entities, this.ticks, this.nanos / 1.0e6, this.operations, this.worstTickNanos / 1.0e6, this.worstTickOperations,
+					this.longestWaitTicks);
+		}
+	}
+
+	/** Adds up the current burst, tick by tick. */
+	static final class BurstTracker {
+		private int ticks;
+		private int chunks;
+		private int entities;
+		private long operations;
+		private long nanos;
+		private long worstTickNanos;
+		private long worstTickOperations;
+		private long longestWait;
+
+		/** A tick in which something was caught up. */
+		void tick(int chunks, int entities, long operations, long nanos) {
+			if (this.ticks == 0 || nanos > this.worstTickNanos) {
+				// The slowest tick's own work, not the run's: the two are only the same for a burst of one tick
+				this.worstTickNanos = nanos;
+				this.worstTickOperations = operations;
+			}
+			this.ticks++;
+			this.chunks += chunks;
+			this.entities += entities;
+			this.operations += operations;
+			this.nanos += nanos;
+		}
+
+		/** A chunk or entity caught up after waiting this many ticks once it was ready. */
+		void waited(long ticks) {
+			this.longestWait = Math.max(this.longestWait, ticks);
+		}
+
+		/** Ends the burst: what it added up to (null if nothing was caught up since the last one), and starts afresh. */
+		@Nullable Burst finish() {
+			if (this.ticks == 0) {
+				return null;
+			}
+			Burst burst = new Burst(this.ticks, this.chunks, this.entities, this.operations, this.nanos, this.worstTickNanos,
+					this.worstTickOperations, this.longestWait);
+			this.ticks = 0;
+			this.chunks = 0;
+			this.entities = 0;
+			this.operations = 0L;
+			this.nanos = 0L;
+			this.worstTickNanos = 0L;
+			this.worstTickOperations = 0L;
+			this.longestWait = 0L;
+			return burst;
 		}
 	}
 
